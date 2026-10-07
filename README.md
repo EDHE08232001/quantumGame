@@ -1,16 +1,45 @@
-# React + Vite
+# Qubits vs Noise
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A *Plants vs. Zombies*-style browser game that teaches **quantum error
+suppression and mitigation**. Errors march down each qubit's wire; you
+defend with four real techniques:
 
-Currently, two official plugins are available:
+| | Technique | Type | Counters |
+| --- | --- | --- | --- |
+| 📈 | **Zero-Noise Extrapolation (ZNE)** | Mitigation | Stochastic gate noise |
+| 🎵 | **Dynamical Decoupling (DD)** | Suppression | Idle dephasing / crosstalk |
+| 🦖 | **TREX** (Twirled Readout Error eXtinction) | Mitigation | Measurement (readout) errors |
+| 🌀 | **Pauli Twirling** | Suppression | Coherent errors (pairs with ZNE) |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Five campaign levels each introduce a new error and the technique that beats
+it, with lesson cards, checkpoint quizzes, a Quantum Almanac and an endless
+mode. See **[docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)** for the full design.
 
-## React Compiler
+## Run it
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Requires Node.js 20+.
 
-## Expanding the Oxlint configuration
+```sh
+npm install
+npm run dev        # then open the URL it prints (http://localhost:5173)
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Other scripts:
+
+```sh
+npm test           # headless engine tests, including "is every level winnable?"
+npm run lint       # oxlint
+npm run build      # production build into dist/
+npm run preview    # serve the production build
+```
+
+Tip: add `?unlockAll` to the URL to skip straight to any level.
+
+## How to play
+
+- Click a technique card (or press `1`–`5`), then click a tile to deploy it.
+- Click the glowing ⚡ tokens to collect **Shots**, your budget. Samplers
+  produce them, and they also fall from above.
+- `S` removes a defender, right-click or `Esc` cancels, and `P` pauses.
+- If an error reaches a qubit, that qubit loses fidelity. If any qubit hits
+  0%, you lose.
