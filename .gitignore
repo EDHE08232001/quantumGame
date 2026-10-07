@@ -25,3 +25,4 @@ dist-ssr
 
 # System Junk
 .DS_Store
+._*
