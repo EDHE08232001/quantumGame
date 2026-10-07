@@ -4,15 +4,19 @@ A *Plants vs. Zombies*-style browser game that teaches **quantum error
 suppression and mitigation**. Errors march down each qubit's wire, and you
 defend with four real techniques used on today's quantum computers:
 
-| | Technique | Type | Counters |
+| | Technique | Category | ×2 damage vs |
 | --- | --- | --- | --- |
-| 📈 | **Zero-Noise Extrapolation (ZNE)** | Mitigation | Stochastic gate noise |
-| 🎵 | **Dynamical Decoupling (DD)** | Suppression | Idle dephasing / crosstalk |
-| 🦖 | **TREX** (Twirled Readout Error eXtinction) | Mitigation | Measurement (readout) errors |
-| 🌀 | **Pauli Twirling** | Suppression | Coherent errors (pairs with ZNE) |
+| 📈 | **Zero-Noise Extrapolation (ZNE)** | Mitigation | **Gate noise** (stochastic gate errors) |
+| 🎵 | **Dynamical Decoupling (DD)** | Suppression | **Idle noise** (dephasing, ZZ crosstalk) |
+| 🦖 | **TREX** (Twirled Readout Error eXtinction) | Mitigation | **Readout** errors |
+| 🌀 | **Pauli Twirling** | Suppression | **Coherent** errors (pairs with ZNE) |
 
-Five campaign levels each introduce a new error and the technique that beats
-it. The game also has lesson cards, checkpoint quizzes, a Quantum Almanac and
+Every error has one of four **types**. The technique built for that type deals
+**×2 damage**; any other technique deals only **×½**. Picking the right tool for
+each lane is the challenge.
+
+Seven campaign levels introduce nine errors (two of each type, plus a boss).
+The game also has lesson cards, checkpoint quizzes, a Quantum Almanac and
 an endless mode. See **[docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)** for the
 full design.
 
@@ -152,8 +156,13 @@ qubits   9 tiles per lane: place your defenders here
 
 - **⚡ Shots**: your budget. Every defender costs Shots, just as real error
   mitigation costs extra circuit runs.
-- **Technique cards**: hover over one to see what it does. A card is greyed
+- **Technique cards**: hover over one to see what it does. The colored badge
+  in a card's corner is the error type it deals ×2 damage to. A card is greyed
   out while it's recharging or when you can't afford it.
+- **Type badges**: every error carries a colored badge (**G** Gate noise,
+  **φ** Idle noise, **M** Readout, **θ** Coherent). Match it to the card with
+  the same color. When your shots land you'll see **×2** pops for the right
+  technique and grey **×½** pops for the wrong one.
 - **Wave bar**: progress through the level. ⚑ flags mark big waves.
 - **❚❚ / 1× / 🔊**: pause, double speed and sound on or off.
 
@@ -186,18 +195,25 @@ The pause menu also opens the **Quantum Almanac** and has an
    that reach a defender stop and chew through it (it "decoheres"), so build
    more than one line of defense.
 
-### Who counters whom
+### Error types: who counters whom
 
-Each level adds a new error. Matching the right technique to it is the
-whole game:
+Every error has a **type**, and every technique is built for one type:
 
-| Error | What it is physically | Its trick | Best counter (cost) |
-| --- | --- | --- | --- |
-| 🟣 **Depolarizer** | Random (stochastic) gate noise | None: a plain walker | **ZNE** (125) |
-| 👻 **Dephaser** | Phase drift on idle qubits | Drifts out of phase, so shots pass through it. Speeds up over time. | **Dynamical Decoupling** (50): echo pulses refocus it |
-| 😈 **Readout Gremlin** | Measurement error (0 ↔ 1) | Walks straight through every other defender | **TREX** (75): the only defender that can bite it |
-| 🌀 **Over-Rotator** | Coherent error (θ + ε every time) | **Coherent armor** that ZNE barely dents | **Pauli Twirling** (100) strips the armor; then ZNE finishes it |
-| 🔴 **Crosstalk Colossus** (boss) | Correlated multi-qubit error | Huge armored boss that spawns Dephasers in neighbouring lanes | All of the above together |
+- **Right technique: ×2 damage.**
+- **Any other technique: ×½ damage.** Wrong-tool hits still add up, but you
+  need about four times as much of it.
+
+| Type | Errors | What they are physically | Their trick | ×2 from (cost) |
+| --- | --- | --- | --- | --- |
+| **G** Gate noise | 🟣 **Depolarizer** | Random (stochastic) gate noise | None: a plain walker | **ZNE** (125) |
+| | 🟪 **CNOT Crusher** | Two-qubit gate error, ~10× noisier than single-qubit gates | Big, slow and very tough | |
+| **φ** Idle noise | 👻 **Dephaser** | Phase drift on idle qubits | Drifts out of phase, so shots pass through it. Speeds up over time. | **Dynamical Decoupling** (50): echo pulses also refocus it |
+| | 🐸 **ZZ Hopper** | Always-on ZZ crosstalk between neighbours | Hops to a neighbouring lane every few seconds, unless DD has refocused it | |
+| **M** Readout | 😈 **Readout Gremlin** | Measurement error (0 ↔ 1) | Slips past every defender except TREX | **TREX** (75): the only defender it can't slip past |
+| | 🐦 **Flip Flock** | Correlated readout errors (readout crosstalk) | Arrives in three neighbouring lanes at once | |
+| **θ** Coherent | 🌀 **Over-Rotator** | Coherent error (θ + ε every time) | **Coherent armor**. Once it breaks, the error becomes Gate noise, and ZNE takes over. | **Pauli Twirling** (100) |
+| | 🍴 **Detuner** | Miscalibrated qubit frequency | Hits harder and moves faster the longer it lives (up to 3×). Twirl hits reset it. | |
+| (boss) | 🔴 **Crosstalk Colossus** | Correlated multi-qubit error | Huge coherent-armored boss that spawns Dephasers in neighbouring lanes | All of the above together |
 
 ### Tips
 
@@ -206,18 +222,25 @@ whole game:
 - **DD is cheap and tough** (50 Shots, high integrity). It makes a great wall
   in front of your ZNEs, even in lanes without Dephasers, because it slows
   everything it pulses.
-- **Watch which lanes Gremlins use** and put a TREX in front of them. Nothing
-  else stops them.
+- **Read the badge, not the shape.** Two errors that look different can share
+  a type, and the CNOT Crusher is just Gate noise in bulk.
+- **Watch which lanes Readout errors use** and put a TREX in front of them.
+  Nothing else blocks them, and gate-level techniques only chip at them for ×½.
+- **Twirl Detuners early.** Their coherent build-up makes them hit up to 3×
+  harder, and every Twirl hit resets it.
 - **Twirling + ZNE is a combo.** Twirled errors (marked by three small red/green/blue dots)
   take +50% damage from ZNE. This is the same reason real experiments pair
   twirling with ZNE.
-- Lost a level? The defeat screen tells you which error got through and what
-  counters it.
+- Lost a level? The defeat screen tells you which error got through, its type
+  and the technique that counters it. Both result screens also show how much of
+  your damage came from the right technique.
 
 ### Levels, stars and saving
 
-- **5 campaign levels** unlock in order. Beat Level 5 to unlock **Endless
-  mode** (Noise Storm), where your score is the wave you reach.
+- **7 campaign levels** unlock in order. Levels 1–4 each introduce one error
+  type and its technique, Levels 5–6 add a second, trickier error of each
+  type, and Level 7 is the boss. Beat Level 7 to unlock **Endless mode**
+  (Noise Storm), where your score is the wave you reach.
 - **Stars** depend on your final average fidelity: 90%+ earns ★★★ and 65%+
   earns ★★.
 - After each win, answer the **checkpoint question** correctly to start your
@@ -259,7 +282,7 @@ The game is plain React + Vite with no backend:
 ```
 src/game/engine.js     deterministic simulation (no DOM, so it's testable in Node)
 src/game/renderer.js   procedural canvas art (no image files)
-src/game/data.js       techniques & errors: stats and educational text
+src/game/data.js       techniques, errors & the ×2 / ×½ type chart: stats and educational text
 src/game/levels.js     waves, lesson cards, quizzes, endless mode
 src/components/        React UI: HUD, menus, lessons, Almanac, quiz
 tests/                 node:test suite and a bot player used for balance checks

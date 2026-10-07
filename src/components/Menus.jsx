@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { ENEMIES, UNITS } from '../game/data.js'
+import { COUNTER_FOR, EFFECTIVE_MULT, ENEMIES, ENEMY_ORDER, ERROR_TYPES, RESISTED_MULT, TYPE_ORDER, UNITS, formatMult } from '../game/data.js'
 import { ENDLESS, LEVELS } from '../game/levels.js'
 import { drawEnemySprite, drawUnitSprite } from '../game/renderer.js'
+import { TypeBadge } from './Almanac.jsx'
 import SpriteIcon from './SpriteIcon.jsx'
 
 // A little looping parade of defenders and errors behind the title.
@@ -17,7 +18,7 @@ function Backdrop() {
     canvas.height = H * dpr
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     const units = ['sampler', 'zne', 'dd', 'trex', 'twirl']
-    const enemies = ['depolarizer', 'dephaser', 'gremlin', 'overRotator']
+    const enemies = ['depolarizer', 'dephaser', 'gremlin', 'overRotator', 'cnotCrusher', 'zzHopper', 'detuner']
     let raf = 0
     const t0 = performance.now()
     const loop = (now) => {
@@ -31,8 +32,16 @@ function Backdrop() {
       ctx.stroke()
       units.forEach((u, i) => drawUnitSprite(ctx, u, 50 + i * 85, 80, t + i))
       enemies.forEach((type, i) => {
-        const x = W + 60 - ((t * 28 + i * 140) % 420)
-        drawEnemySprite(ctx, type, x, 80, t + i, { seed: i * 7, armor: 1, outOfPhase: Math.sin(t * 2 + i) > 0.6, refocusT: 0, drift: 0.3 })
+        const x = W + 60 - ((t * 28 + i * 105) % 735)
+        drawEnemySprite(ctx, type, x, 80, t + i, {
+          seed: i * 7,
+          armor: 1,
+          outOfPhase: Math.sin(t * 2 + i) > 0.6,
+          refocusT: 0,
+          drift: 0.3,
+          buildup: 0.5 + 0.5 * Math.sin(t + i),
+          twirledT: 0,
+        })
       })
       raf = requestAnimationFrame(loop)
     }
@@ -97,7 +106,9 @@ export function LevelSelect({ progress, onPick, onBack }) {
               <div className="level-title">{l.name}</div>
               <div className="level-sub">{l.subtitle}</div>
               <div className="level-icons">
-                {l.intro.newError && <SpriteIcon kind="enemy" type={l.intro.newError} size={46} />}
+                {l.intro.newErrors.map((id) => (
+                  <SpriteIcon key={id} kind="enemy" type={id} size={46} />
+                ))}
                 {l.intro.newUnits.map((u) => (
                   <SpriteIcon key={u} kind="unit" type={u} size={46} />
                 ))}
@@ -121,7 +132,7 @@ export function LevelSelect({ progress, onPick, onBack }) {
             <SpriteIcon kind="enemy" type="colossus" size={46} />
           </div>
           <div className="level-stars">
-            {campaignDone ? `Best: wave ${progress.bestEndless || 0}` : '🔒 Beat level 5'}
+            {campaignDone ? `Best: wave ${progress.bestEndless || 0}` : `🔒 Beat level ${LEVELS.length}`}
           </div>
         </button>
       </div>
@@ -169,17 +180,29 @@ export function HowTo({ onClose }) {
           </ul>
         </section>
         <section>
-          <h3>Who counters whom</h3>
+          <h3>Error types: pick the right tool</h3>
+          <p>
+            Every error has a <b>type</b>, shown by the colored badge above it. Each technique is built for one type and
+            deals <b>{formatMult(EFFECTIVE_MULT)} damage</b> to it. Against any other type it only deals{' '}
+            <b>{formatMult(RESISTED_MULT)}</b>. Watch for the {formatMult(EFFECTIVE_MULT)} and {formatMult(RESISTED_MULT)}{' '}
+            pops when your shots land.
+          </p>
           <div className="counter-grid">
-            {['depolarizer', 'dephaser', 'gremlin', 'overRotator'].map((id) => (
-              <div key={id} className="counter">
-                <SpriteIcon kind="enemy" type={id} size={56} />
+            {TYPE_ORDER.map((type) => (
+              <div key={type} className="counter">
+                <div className="counter-errors">
+                  {ENEMY_ORDER.filter((id) => ENEMIES[id].errorType === type && !ENEMIES[id].boss).map((id) => (
+                    <SpriteIcon key={id} kind="enemy" type={id} size={48} />
+                  ))}
+                </div>
                 <span className="arrow">←</span>
-                <SpriteIcon kind="unit" type={ENEMIES[id].counter} size={56} />
+                <SpriteIcon kind="unit" type={COUNTER_FOR[type]} size={56} />
                 <div>
-                  <b>{ENEMIES[id].name}</b>: {ENEMIES[id].kind}
+                  <TypeBadge type={type} />
                   <br />
-                  countered by <b>{UNITS[ENEMIES[id].counter].name}</b>
+                  {ERROR_TYPES[type].text}
+                  <br />
+                  {formatMult(EFFECTIVE_MULT)} from <b>{UNITS[COUNTER_FOR[type]].name}</b>
                 </div>
               </div>
             ))}

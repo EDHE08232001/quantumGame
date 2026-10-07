@@ -12,7 +12,7 @@ import {
   cellCenter,
   rowCenterY,
 } from './constants.js'
-import { ENEMIES, UNITS } from './data.js'
+import { EFFECTIVE_MULT, ENEMIES, ERROR_TYPES, RESISTED_MULT, UNITS, formatMult, matchup, typeMultiplier } from './data.js'
 import { endlessWave } from './levels.js'
 
 export function mulberry32(seed) {
@@ -30,6 +30,7 @@ const SKY_DROP_EVERY = 9
 const TOKEN_VALUE = 25
 const TOKEN_LIFE = 10
 const PAULIS = ['X', 'Y', 'Z']
+const MATCHUP_TAG_EVERY = 1.2 // seconds between ×2 / ×½ floaters on one error
 
 export class GameEngine {
   constructor(level, { seed = (Math.random() * 2 ** 32) >>> 0, bonusShots = 0, autoCollect = false } = {}) {
@@ -65,7 +66,7 @@ export class GameEngine {
     this.waveStartedAt = -Infinity
     this.spawnQueue = []
     this.skyTimer = 3
-    this.stats = { kills: {}, leaks: {}, placed: {} }
+    this.stats = { kills: {}, leaks: {}, placed: {}, hits: { effective: 0, resisted: 0 }, dealt: { effective: 0, resisted: 0 } }
   }
 
   get totalWaves() {
@@ -234,7 +235,7 @@ export class GameEngine {
       const s = this.spawnQueue[i]
       if (this.time >= s.at) {
         this.spawnQueue.splice(i, 1)
-        this.spawnEnemy(s.type, s.row, s.hpScale)
+        this.spawnGroup(s.type, s.row, s.hpScale)
       }
     }
   }
@@ -275,6 +276,13 @@ export class GameEngine {
     this.nextWaveAt = this.time + wave.gap
   }
 
+  // A Flip Flock spawns one bird in its lane and in each active neighbouring lane.
+  spawnGroup(type, row, hpScale = 1, x = SPAWN_X) {
+    if (!ENEMIES[type].flock) return [this.spawnEnemy(type, row, hpScale, x)]
+    const rows = [row - 1, row, row + 1].filter((r) => r >= 0 && r < ROWS && this.qubits[r].active)
+    return rows.map((r, k) => this.spawnEnemy(type, r, hpScale, x + k * 14))
+  }
+
   spawnEnemy(type, row, hpScale = 1, x = SPAWN_X) {
     const def = ENEMIES[type]
     const hp = Math.round(def.hp * hpScale)
@@ -290,6 +298,7 @@ export class GameEngine {
       armor,
       maxArmor: armor,
       radius: def.radius,
+      etype: def.errorType, // current error type; coherent armor decays to def.decaysTo
       seed: this.rng() * 100,
       age: 0,
       slowT: 0,
@@ -298,6 +307,9 @@ export class GameEngine {
       hitFlash: 0,
       outOfPhase: false,
       drift: 0,
+      buildup: 0,
+      hopT: def.hopEvery ? def.hopEvery * this.rand(0.6, 1) : 0,
+      tagT: 0,
       attacking: null,
       spawnT: def.spawnEvery || 0,
       zapT: 0,
@@ -331,16 +343,9 @@ export class GameEngine {
     }
   }
 
-  enemiesAhead(unit, { ghosts = false, rangeCells = Infinity } = {}) {
+  enemiesAhead(unit, { rangeCells = Infinity } = {}) {
     const maxX = Math.min(FIELD_RIGHT + 10, unit.x + rangeCells * CELL_W)
-    return this.enemies.filter(
-      (e) =>
-        e.row === unit.row &&
-        e.hp > 0 &&
-        e.x >= unit.x - CELL_W * 0.45 &&
-        e.x <= maxX &&
-        (ghosts ? true : !ENEMIES[e.type].ghost),
-    )
+    return this.enemies.filter((e) => e.row === unit.row && e.hp > 0 && e.x >= unit.x - CELL_W * 0.45 && e.x <= maxX)
   }
 
   updateUnits(dt) {
@@ -400,27 +405,31 @@ export class GameEngine {
           u.flash = 1
           this.pulses.push({ x: u.x + 16, y: u.y, life: 0.6, maxLife: 0.6, range: def.range * CELL_W })
           for (const e of targets) {
-            const isDephaser = e.type === 'dephaser'
-            if (isDephaser) {
+            // Echo pulses refocus idle errors: dephasers stop dodging, hoppers stop hopping.
+            if (e.etype === 'idle') {
               if (e.refocusT <= 0) this.floater(e.x, e.y - 30, 'refocused!', '#d9c2ff')
               e.refocusT = def.refocusTime
               e.outOfPhase = false
             }
             e.slowT = Math.max(e.slowT, def.slowTime)
-            this.damage(e, def.dmg * (isDephaser ? def.dephaserMult : 1), 'dd')
+            this.damage(e, def.dmg, 'dd')
           }
           this.emit({ type: 'pulse' })
         }
       } else if (u.type === 'trex') {
-        const targets = this.enemiesAhead(u, { ghosts: true, rangeCells: def.range }).filter((e) => e.type === 'gremlin')
-        if (targets.length > 0) {
+        const inRange = this.enemiesAhead(u, { rangeCells: def.range })
+        if (inRange.length > 0) {
           u.chomp = Math.max(u.chomp, 0.35) // jaws open while something is in range
           if (u.timer <= 0) {
             u.timer = def.biteEvery
             u.chomp = 1
-            const target = targets.reduce((a, b) => (a.x < b.x ? a : b))
-            this.damage(target, def.dmgGremlin, 'trex')
-            this.floater(target.x, target.y - 26, '0⇄1 fixed!', '#9dffb0')
+            // Readout errors first, then whatever is closest.
+            const readout = inRange.filter((e) => e.etype === 'readout')
+            const pool = readout.length > 0 ? readout : inRange
+            const target = pool.reduce((a, b) => (a.x < b.x ? a : b))
+            if (this.damage(target, def.dmg, 'trex') === 'effective') {
+              this.floater(target.x, target.y - 26, '0⇄1 fixed!', '#9dffb0', 0.9)
+            }
             this.emit({ type: 'bite' })
           }
         }
@@ -433,7 +442,7 @@ export class GameEngine {
       p.x += p.speed * dt
       p.spin += dt * 10
       for (const e of this.enemies) {
-        if (e.row !== p.row || e.hp <= 0 || ENEMIES[e.type].ghost) continue
+        if (e.row !== p.row || e.hp <= 0) continue
         if (Math.abs(e.x - p.x) > e.radius * 0.8) continue
         if (e.outOfPhase) {
           if (!p.passed.has(e.id)) {
@@ -444,8 +453,10 @@ export class GameEngine {
         }
         this.damage(e, p.dmg, p.kind)
         if (p.kind === 'twirl') {
-          if (e.twirledT <= 0 && e.armor <= 0) this.floater(e.x, e.y - 34, 'twirled', '#ffe680', 0.8)
+          if (e.buildup > 0.25) this.floater(e.x, e.y - 34, 'build-up scrambled!', '#ffe680', 0.9)
+          else if (e.twirledT <= 0 && e.armor <= 0) this.floater(e.x, e.y - 34, 'twirled', '#ffe680', 0.8)
           e.twirledT = UNITS.twirl.twirlTime
+          e.buildup = 0
         }
         this.sparks(p.x, p.y, p.kind === 'zne' ? '#5ff2e3' : this.letterColor(p.letter), 5)
         p.dead = true
@@ -460,14 +471,31 @@ export class GameEngine {
     return l === 'X' ? '#ff5d73' : l === 'Y' ? '#7cff7a' : '#5db7ff'
   }
 
+  // Deals `amount` base damage from a technique to an error, scaled by the
+  // type chart: ×2 if the technique is built for the error's type, ×½ if not.
+  // Returns 'effective' or 'resisted' (or null if the error was already dead).
   damage(e, amount, source) {
-    if (e.hp <= 0) return
+    if (e.hp <= 0) return null
+    const result = matchup(source, e.etype)
+    const dealt = amount * typeMultiplier(source, e.etype)
     e.hitFlash = 1
+    e.hitKind = result
+    this.stats.hits[result]++
+    if (e.tagT <= 0) {
+      // Pop a ×2 / ×½ tag to the right of the health bar (the type badge sits on its left).
+      e.tagT = MATCHUP_TAG_EVERY
+      const tx = e.x + Math.max(34, e.radius + 8)
+      const ty = e.y - e.radius - 8
+      if (result === 'effective') this.floater(tx, ty, formatMult(EFFECTIVE_MULT), '#ffffff', 0.7, e.etype)
+      else this.floater(tx, ty, formatMult(RESISTED_MULT), '#8b93b8', 0.7)
+    }
+    this.stats.dealt[result] += dealt
     if (e.armor > 0) {
-      const mult = source === 'twirl' ? UNITS.twirl.armorMult : source === 'zne' ? UNITS.zne.armorMult : 1
-      e.armor -= amount * mult
+      e.armor -= dealt
       if (e.armor <= 0) {
         e.armor = 0
+        // Twirled away: what's left is ordinary stochastic noise.
+        e.etype = ENEMIES[e.type].decaysTo || e.etype
         e.twirledT = Math.max(e.twirledT, UNITS.twirl.twirlTime)
         this.floater(e.x, e.y - 40, 'coherent → stochastic!', '#ffd24a', 1.4)
         for (let i = 0; i < 14; i++) {
@@ -485,19 +513,19 @@ export class GameEngine {
         }
         this.emit({ type: 'armorBreak' })
       }
-      return
+      return result
     }
-    let mult = 1
-    if (source === 'zne' && e.twirledT > 0) mult = UNITS.zne.twirledBonus
-    e.hp -= amount * mult
+    const bonus = source === 'zne' && e.twirledT > 0 ? UNITS.zne.twirledBonus : 1
+    e.hp -= dealt * bonus
     if (e.hp <= 0) this.kill(e)
+    return result
   }
 
   kill(e) {
     e.hp = 0
     e.dead = true
     this.stats.kills[e.type] = (this.stats.kills[e.type] || 0) + 1
-    this.puff(e.x, e.y, e.type === 'gremlin' ? '#7dffc7' : '#c08bff', e.type === 'colossus' ? 40 : 14)
+    this.puff(e.x, e.y, e.etype === 'readout' ? '#7dffc7' : '#c08bff', e.type === 'colossus' ? 40 : 14)
     this.emit({ type: 'kill', enemy: e.type })
   }
 
@@ -511,6 +539,10 @@ export class GameEngine {
       e.refocusT = Math.max(0, e.refocusT - dt)
       e.hitFlash = Math.max(0, e.hitFlash - dt * 5)
       e.zapT = Math.max(0, e.zapT - dt)
+      e.tagT = Math.max(0, e.tagT - dt)
+      // Glide toward the lane centre (only differs right after a hop).
+      e.y += (rowCenterY(e.row) - e.y) * Math.min(1, dt * 10)
+      const onBoard = e.x < FIELD_RIGHT
 
       if (e.type === 'dephaser') {
         const phase = ((e.age + e.seed) % def.phasePeriod) / def.phasePeriod
@@ -519,9 +551,22 @@ export class GameEngine {
         e.drift = e.refocusT > 0 ? 0 : Math.min(1, e.drift + dt / def.driftTime)
       }
 
+      if (def.buildupTime && onBoard) {
+        // Coherent build-up: the same small rotation keeps adding up, unless twirled.
+        e.buildup = e.twirledT > 0 ? 0 : Math.min(1, e.buildup + dt / def.buildupTime)
+      }
+
+      if (def.hopEvery && onBoard) {
+        e.hopT -= dt
+        if (e.hopT <= 0) {
+          e.hopT = def.hopEvery
+          this.hop(e)
+        }
+      }
+
       if (def.boss) {
         e.spawnT -= dt
-        if (e.spawnT <= 0 && e.x < FIELD_RIGHT) {
+        if (e.spawnT <= 0 && onBoard) {
           e.spawnT = def.spawnEvery
           e.zapT = 0.6
           for (const r of [e.row - 1, e.row + 1]) {
@@ -544,12 +589,30 @@ export class GameEngine {
         }
       } else {
         const slow = e.slowT > 0 ? 1 - UNITS.dd.slow : 1
-        e.x -= def.speed * (1 + e.drift) * slow * dt
+        const rush = 1 + e.drift + e.buildup * (def.buildupSpeed || 0)
+        e.x -= def.speed * rush * slow * dt
       }
 
       if (e.x <= QUBIT_LINE) this.hitQubit(e)
     }
     this.enemies = this.enemies.filter((e) => !e.dead)
+  }
+
+  // ZZ crosstalk: jump to a neighbouring qubit's wire, unless DD has refocused it.
+  hop(e) {
+    if (e.refocusT > 0) return false
+    const options = [e.row - 1, e.row + 1].filter((r) => r >= 0 && r < ROWS && this.qubits[r].active)
+    if (options.length === 0) return false
+    e.row = this.pick(options)
+    e.attacking = null
+    this.floater(e.x, e.y - 34, 'ZZ hop!', ERROR_TYPES.idle.color, 0.9)
+    this.emit({ type: 'hop' })
+    return true
+  }
+
+  fidelityDamage(e) {
+    const def = ENEMIES[e.type]
+    return Math.round(def.fidelityDmg * (1 + e.buildup * (def.buildupDmg || 0)))
   }
 
   findBlocker(e) {
@@ -570,11 +633,12 @@ export class GameEngine {
   hitQubit(e) {
     const def = ENEMIES[e.type]
     const q = this.qubits[e.row]
-    q.fidelity = Math.max(0, q.fidelity - def.fidelityDmg)
+    const loss = this.fidelityDamage(e)
+    q.fidelity = Math.max(0, q.fidelity - loss)
     q.hitFlash = 1
     e.dead = true
     this.stats.leaks[e.type] = (this.stats.leaks[e.type] || 0) + 1
-    this.floater(GRID_X - 40, e.y - 40, `-${def.fidelityDmg}% fidelity`, '#ff7b7b', 1.4)
+    this.floater(GRID_X - 40, e.y - 40, `-${loss}% fidelity`, '#ff7b7b', 1.4)
     this.emit({ type: 'qubitHit', row: e.row, enemy: e.type })
     if (q.fidelity <= 0 && this.state === 'playing') {
       this.state = 'lost'
@@ -643,8 +707,15 @@ export class GameEngine {
     }
   }
 
-  floater(x, y, text, color, life = 1.1) {
-    this.floaters.push({ x, y, text, color, life, maxLife: life })
+  floater(x, y, text, color, life = 1.1, etype = null) {
+    this.floaters.push({ x, y, text, color, life, maxLife: life, etype })
+  }
+
+  // Share of damage dealt by the technique built for the error's type (0-1), or null before any hits.
+  matchupAccuracy() {
+    const { effective, resisted } = this.stats.dealt
+    const total = effective + resisted
+    return total > 0 ? effective / total : null
   }
 
   puff(x, y, color, n) {
