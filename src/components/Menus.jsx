@@ -72,7 +72,8 @@ export function MainMenu({ onPlay, onAlmanac, onHowTo }) {
 }
 
 export function LevelSelect({ progress, onPick, onBack }) {
-  const campaignDone = progress.unlocked > LEVELS.length
+  const unlocked = progress.unlockAll ? Infinity : progress.unlocked
+  const campaignDone = unlocked > LEVELS.length
   return (
     <div className="levels screen">
       <header className="screen-head">
@@ -83,7 +84,7 @@ export function LevelSelect({ progress, onPick, onBack }) {
       </header>
       <div className="level-grid">
         {LEVELS.map((l) => {
-          const locked = l.id > progress.unlocked
+          const locked = l.id > unlocked
           const stars = progress.stars[l.id] || 0
           return (
             <button

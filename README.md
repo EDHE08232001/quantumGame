@@ -30,14 +30,23 @@ start a small local web server, and nothing is sent anywhere.
 
 ### 1. Install Node.js (one time)
 
-You need **Node.js 20.19+ or 22.12+**. Installing the current LTS version is
-the easiest choice. To see what you already have, open a terminal and run:
+You need **Node.js 22.12 or newer**. Installing the current LTS version is
+the easiest choice. (20.19+ also works, but Node 20 is no longer supported.)
+
+> **Which terminal?** On macOS, open the **Terminal** app (press ⌘ Space and
+> type *Terminal*; the default shell is zsh). On Windows, use **Command
+> Prompt** (Start menu, type `cmd`, press Enter). PowerShell and Windows
+> Terminal also work, but first need a
+> [one-time setting](#troubleshooting) to allow `npm`.
+
+To see what you already have, open a terminal and run:
 
 ```sh
 node --version
 ```
 
-If the command isn't found, or the version is older than v20.19, install Node:
+If the command isn't found, or it prints a version lower than **v22.12** (for
+example v21.x or v22.11), install Node:
 
 | System | How to install |
 | --- | --- |
@@ -48,10 +57,6 @@ If the command isn't found, or the version is older than v20.19, install Node:
 npm (the package installer) comes with Node. After installing, **close and
 reopen your terminal** so it finds the new `node` and `npm` commands.
 
-> **Which terminal?** On macOS, open the **Terminal** app (the default shell
-> is zsh). On Windows, use **Command Prompt**, **PowerShell** or **Windows
-> Terminal**.
-
 ### 2. Get the code
 
 With Git:
@@ -61,9 +66,14 @@ git clone https://github.com/EDHE08232001/quantumGame.git
 cd quantumGame
 ```
 
-Without Git, open the repository on GitHub, click **Code → Download ZIP**,
-unzip it, and open a terminal **inside the unzipped folder** (the one that
-contains `package.json`).
+Without Git, open the repository on GitHub, click **Code → Download ZIP**
+and unzip it. The folder is called `quantumGame-main`. To open a terminal
+inside it:
+
+- **Mac:** in Terminal, type `cd ` (with a space), drag the folder onto the
+  Terminal window, and press Return.
+- **Windows:** open the folder (the one containing `package.json`) in File
+  Explorer, click the address bar, type `cmd` and press Enter.
 
 ### 3. Install the dependencies (one time)
 
@@ -90,12 +100,14 @@ You'll see something like:
 ```
 
 Open **http://localhost:5173** in your browser (Chrome, Edge, Firefox or
-Safari). To have the browser open automatically, run
-`npm run dev -- --open` instead.
+Safari). Or, while the server is running, type `o` in the terminal and press
+Enter to open it automatically.
 
-- **To stop the server:** go back to the terminal and press `Ctrl + C`.
-- **To play again later:** `cd` into the folder and run `npm run dev`. You
-  don't need to run `npm install` again.
+- **To stop the server:** go back to the terminal and press `Ctrl + C` (on a
+  Mac too, not ⌘), or type `q` and press Enter.
+- **To play again later:** open a terminal in the game folder (for example
+  `cd quantumGame`, or as in step 2) and run `npm run dev`. You don't need to
+  run `npm install` again.
 - If port 5173 is busy, Vite automatically picks the next free port (5174,
   …). Use whichever URL it prints.
 
@@ -107,7 +119,7 @@ Safari). To have the browser open automatically, run
 On the same Wi-Fi network, start the server with:
 
 ```sh
-npm run dev -- --host
+npx vite --host
 ```
 
 Then open the **Network** URL it prints (for example
@@ -121,8 +133,9 @@ npm run build      # creates the dist/ folder
 npm run preview    # serves it at http://localhost:4173
 ```
 
-The `dist/` folder is a static website. You can host it anywhere that serves
-static files, such as GitHub Pages or Netlify.
+The `dist/` folder is a static website you can host on any static host, such
+as Netlify. For GitHub Pages, which serves it from `/quantumGame/`, build with
+`npx vite build --base=./` instead.
 
 ---
 
@@ -165,8 +178,8 @@ qubits   9 tiles per lane: place your defenders here
 | Place it | Click an empty tile | n/a |
 | Collect Shots | Click the glowing ⚡ tokens | n/a |
 | Remove a defender | ✖ **Remove** card, then click the defender | `S`, then click |
-| Cancel a selection | Right-click | `Esc` |
-| Pause / resume | ❚❚ button | `P` (or `Esc` when nothing is selected) |
+| Cancel a selection | Right-click, or click/tap the selected card again | `Esc` |
+| Pause / resume | ❚❚ button, then **Resume** in the pause menu | `P` (or `Esc` when nothing is selected) |
 
 The pause menu also opens the **Quantum Almanac** and has an
 **Auto-collect Shot tokens** option, if you'd rather not click tokens.
@@ -222,11 +235,13 @@ whole game:
   earns ★★.
 - After each win, answer the **checkpoint question** correctly to start your
   next level with **+50 Shots**.
-- Progress is saved automatically in your browser (`localStorage`). It's
-  separate for each browser, and clearing the site data for `localhost`
-  resets it.
-- **Shortcut:** open `http://localhost:5173/?unlockAll` to make every level
-  playable straight away.
+- Progress is saved automatically in your browser (`localStorage`). It's tied
+  to the exact address, **port included**, so `localhost:5173`,
+  `localhost:5174` and `npm run preview`'s `localhost:4173` each keep separate
+  progress. Clearing the site data for `localhost` resets it.
+- **Shortcut:** add `?unlockAll` to the game's address (for example
+  `http://localhost:5173/?unlockAll`) to make every level playable for that
+  visit. It isn't saved, so the normal address keeps your real progress.
 
 ---
 
@@ -235,8 +250,8 @@ whole game:
 | Problem | Fix |
 | --- | --- |
 | `command not found: npm` (macOS) or `'npm' is not recognized…` (Windows) | Node.js isn't installed or the terminal can't find it yet. Install it ([step 1](#1-install-nodejs-one-time)), then **close and reopen** the terminal. |
-| Windows PowerShell: `npm.ps1 cannot be loaded because running scripts is disabled` | Use **Command Prompt** instead, or allow local scripts once with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. |
-| `npm warn EBADENGINE`, or Vite crashes on start | Your Node.js is too old. Check `node --version` and install the LTS version (20.19+ or 22.12+). |
+| Windows PowerShell: `npm.ps1 cannot be loaded because running scripts is disabled` | Use **Command Prompt** instead. Or, in PowerShell, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` and type `Y` if it asks to confirm. You only need to do this once, and you don't need admin rights. |
+| `npm warn EBADENGINE` during install, or `npm run dev` fails with `Cannot find native binding` | Your Node.js is too old. Install the LTS version (22.12 or newer), **close and reopen** the terminal, then run `npm install` again in the game folder. You don't need to delete `package-lock.json`. |
 | `npm error enoent … package.json` | You're in the wrong folder. `cd` into the folder that contains `package.json`. |
 | Blank page or "This site can't be reached" | Make sure `npm run dev` is still running in the terminal, and use the exact URL it printed. Then refresh the page. |
 | No sound | Browsers only allow audio after you click the page. Also check the 🔊 button in the game. |

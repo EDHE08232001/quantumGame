@@ -7,7 +7,8 @@ export function loadProgress() {
   try {
     const raw = localStorage.getItem(KEY)
     const data = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS }
-    if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')) data.unlocked = 99
+    // ?unlockAll opens every level for this visit only; it is never saved.
+    data.unlockAll = typeof location !== 'undefined' && new URLSearchParams(location.search).has('unlockAll')
     return data
   } catch {
     return { ...DEFAULTS }
@@ -16,7 +17,9 @@ export function loadProgress() {
 
 export function saveProgress(p) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(p))
+    const saved = { ...p }
+    delete saved.unlockAll
+    localStorage.setItem(KEY, JSON.stringify(saved))
   } catch {
     // Progress just won't persist (private mode, blocked storage).
   }
