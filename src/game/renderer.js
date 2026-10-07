@@ -12,7 +12,7 @@ import {
   cellCenter,
   rowCenterY,
 } from './constants.js'
-import { ENEMIES, UNITS } from './data.js'
+import { ENEMIES, ERROR_TYPES, UNITS } from './data.js'
 
 const TAU = Math.PI * 2
 export const PAULI_COLORS = { X: '#ff5d73', Y: '#7cff7a', Z: '#5db7ff' }
@@ -593,6 +593,240 @@ function drawGremlin(ctx, x, y, t, e) {
   ctx.restore()
 }
 
+function drawCnotCrusher(ctx, x, y, t, e) {
+  const seed = e ? e.seed : 0
+  const walking = !e || !e.attacking
+  const stomp = t * (walking ? 5 : 9) + seed
+  const bob = Math.abs(Math.sin(stomp)) * (walking ? 2.5 : 1.5)
+  shadow(ctx, x, y + 38, 30)
+  // stubby legs
+  ctx.fillStyle = '#2a2266'
+  rr(ctx, x - 20 + Math.sin(stomp) * 3, y + 20, 14, 18, 4)
+  ctx.fill()
+  rr(ctx, x + 6 - Math.sin(stomp) * 3, y + 20, 14, 18, 4)
+  ctx.fill()
+  const cy = y - bob
+  // hulking body
+  rr(ctx, x - 30, cy - 30, 60, 54, 16)
+  const g = ctx.createLinearGradient(x - 30, cy - 30, x + 30, cy + 24)
+  g.addColorStop(0, '#8f7bff')
+  g.addColorStop(1, '#2f2378')
+  ctx.fillStyle = g
+  ctx.fill()
+  ctx.strokeStyle = '#c5b9ff'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  // fists, swinging harder while it attacks
+  const swing = walking ? Math.sin(stomp) * 3 : Math.sin(t * 14) * 7
+  ctx.fillStyle = '#5b4bc4'
+  circle(ctx, x - 34 - swing, cy + 8, 9)
+  ctx.fill()
+  circle(ctx, x + 34 + swing * 0.3, cy + 8, 9)
+  ctx.fill()
+  // angry eyes under a heavy brow
+  ctx.fillStyle = '#ffffff'
+  circle(ctx, x - 12, cy - 16, 5)
+  ctx.fill()
+  circle(ctx, x + 4, cy - 16, 5)
+  ctx.fill()
+  ctx.fillStyle = '#120a33'
+  circle(ctx, x - 13.5, cy - 15, 2.5)
+  ctx.fill()
+  circle(ctx, x + 2.5, cy - 15, 2.5)
+  ctx.fill()
+  ctx.strokeStyle = '#1b1247'
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.moveTo(x - 20, cy - 24)
+  ctx.lineTo(x + 12, cy - 22)
+  ctx.stroke()
+  // CNOT emblem on its chest: control dot wired to a target ⊕
+  ctx.strokeStyle = '#ffffff'
+  ctx.fillStyle = '#ffffff'
+  ctx.lineWidth = 2
+  circle(ctx, x - 2, cy - 2, 3.2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(x - 2, cy - 2)
+  ctx.lineTo(x - 2, cy + 18)
+  ctx.stroke()
+  circle(ctx, x - 2, cy + 12, 7)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(x - 9, cy + 12)
+  ctx.lineTo(x + 5, cy + 12)
+  ctx.stroke()
+}
+
+function drawZZHopper(ctx, x, y, t, e) {
+  const seed = e ? e.seed : 0
+  const refocus = e ? e.refocusT > 0 : false
+  const hop = refocus ? Math.abs(Math.sin(t * 3 + seed)) * 2 : Math.abs(Math.sin(t * 6 + seed)) * 9
+  shadow(ctx, x, y + 34, 20)
+  const cy = y + 4 - hop
+  // springy ZZ coil coupling its two lobes
+  ctx.strokeStyle = refocus ? '#ffffff' : '#d7c4ff'
+  ctx.lineWidth = 2.5
+  ctx.beginPath()
+  const coils = 6
+  const stretch = 1 + Math.sin(t * 6 + seed) * (refocus ? 0.02 : 0.12)
+  for (let i = 0; i <= coils; i++) {
+    const px = x - 4 + i * 4.2 * stretch
+    const py = cy - 6 + (i % 2 ? -6 : 6)
+    if (i === 0) ctx.moveTo(px, py)
+    else ctx.lineTo(px, py)
+  }
+  ctx.stroke()
+  const lobe = (lx, ly, r, c0, c1) => {
+    const g = ctx.createRadialGradient(lx - r / 3, ly - r / 3, 2, lx, ly, r)
+    g.addColorStop(0, c0)
+    g.addColorStop(1, c1)
+    ctx.fillStyle = g
+    circle(ctx, lx, ly, r)
+    ctx.fill()
+    if (refocus) {
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }
+  lobe(x + 26 * stretch, cy - 8, 10, '#e6dbff', '#7a52d6')
+  lobe(x - 8, cy, 19, '#d9c7ff', '#5b2fb0')
+  // big hoppy feet
+  ctx.fillStyle = '#4a2596'
+  ctx.beginPath()
+  ctx.ellipse(x - 18, cy + 18 + hop * 0.6, 8, 4, -0.3, 0, TAU)
+  ctx.ellipse(x + 2, cy + 18 + hop * 0.6, 8, 4, 0.3, 0, TAU)
+  ctx.fill()
+  // eyes and a cheeky grin
+  ctx.fillStyle = '#ffffff'
+  circle(ctx, x - 15, cy - 5, 5)
+  ctx.fill()
+  circle(ctx, x - 3, cy - 5, 5)
+  ctx.fill()
+  ctx.fillStyle = '#1d0b45'
+  circle(ctx, x - 16.5, cy - 4, 2.4)
+  ctx.fill()
+  circle(ctx, x - 4.5, cy - 4, 2.4)
+  ctx.fill()
+  ctx.strokeStyle = '#1d0b45'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(x - 9, cy + 4, 6, 0.3, Math.PI - 0.3)
+  ctx.stroke()
+  ctx.font = 'bold 10px ui-monospace, Menlo, monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  outlinedText(ctx, 'ZZ', x + 26 * stretch, cy - 8, '#ffffff', 'rgba(40,10,90,0.9)', 3)
+}
+
+function drawFlipBird(ctx, x, y, t, seed) {
+  const flap = Math.sin(t * 14 + seed)
+  const cy = y + Math.sin(t * 4 + seed) * 4
+  ctx.save()
+  ctx.globalAlpha *= 0.7 + 0.15 * Math.sin(t * 6 + seed)
+  ctx.fillStyle = '#5fe8a8'
+  for (const dir of [-1, 1]) {
+    ctx.beginPath()
+    ctx.moveTo(x, cy - 2)
+    ctx.quadraticCurveTo(x + dir * 10, cy - 16 * flap - 4, x + dir * 22, cy - 10 * flap)
+    ctx.quadraticCurveTo(x + dir * 12, cy - 2, x + dir * 4, cy + 4)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.fillStyle = '#9dffd0'
+  ctx.beginPath()
+  ctx.ellipse(x, cy, 11, 9, 0, 0, TAU)
+  ctx.fill()
+  // beak pointing at the qubits
+  ctx.fillStyle = '#ffb347'
+  ctx.beginPath()
+  ctx.moveTo(x - 10, cy - 1)
+  ctx.lineTo(x - 17, cy + 1)
+  ctx.lineTo(x - 10, cy + 3)
+  ctx.closePath()
+  ctx.fill()
+  ctx.fillStyle = '#ff3355'
+  circle(ctx, x - 5, cy - 3, 2)
+  ctx.fill()
+  ctx.restore()
+  // the bit it is busy flipping
+  const bit = Math.floor(t * 3 + seed) % 2
+  ctx.font = 'bold 10px ui-monospace, Menlo, monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  outlinedText(ctx, String(bit), x + 3, cy + 1, '#0b3d2a', 'rgba(200,255,230,0.9)', 2)
+}
+
+function drawFlipFlock(ctx, x, y, t, e) {
+  shadow(ctx, x, y + 34, 12)
+  drawFlipBird(ctx, x, y, t, e ? e.seed : 0)
+}
+
+function drawDetuner(ctx, x, y, t, e) {
+  const seed = e ? e.seed : 0
+  const b = e ? e.buildup || 0 : 0.5
+  const twirled = e ? e.twirledT > 0 : false
+  shadow(ctx, x, y + 34, 18)
+  // build-up rings: the coherent error growing like (Nε)²
+  if (b > 0.05) {
+    ctx.save()
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 1.5 + i / 3) % 1
+      ctx.strokeStyle = `rgba(255,192,74,${(1 - k) * b * 0.8})`
+      ctx.lineWidth = 2
+      circle(ctx, x, y - 6, 18 + k * (16 + b * 18))
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+  // a tuning fork, slightly out of tune
+  const amp = 1 + b * 3
+  const vib = twirled ? 0 : Math.sin(t * 40 + seed) * amp
+  ctx.save()
+  ctx.lineCap = 'round'
+  const g = ctx.createLinearGradient(x, y - 40, x, y + 30)
+  g.addColorStop(0, '#ffe08a')
+  g.addColorStop(1, '#d9741c')
+  ctx.strokeStyle = g
+  ctx.lineWidth = 9
+  ctx.beginPath()
+  ctx.moveTo(x - 12 - vib, y - 38)
+  ctx.lineTo(x - 12 - vib * 0.4, y - 6)
+  ctx.quadraticCurveTo(x - 12, y + 6, x, y + 6)
+  ctx.quadraticCurveTo(x + 12, y + 6, x + 12 + vib * 0.4, y - 6)
+  ctx.lineTo(x + 12 + vib, y - 38)
+  ctx.stroke()
+  ctx.lineWidth = 8
+  ctx.beginPath()
+  ctx.moveTo(x, y + 6)
+  ctx.lineTo(x, y + 30)
+  ctx.stroke()
+  ctx.restore()
+  // face on the stem, sweating as it detunes
+  ctx.fillStyle = '#fff4d6'
+  circle(ctx, x, y - 2, 11)
+  ctx.fill()
+  ctx.fillStyle = '#4a2205'
+  circle(ctx, x - 4, y - 4, 2)
+  ctx.fill()
+  circle(ctx, x + 4, y - 4, 2)
+  ctx.fill()
+  ctx.strokeStyle = '#4a2205'
+  ctx.lineWidth = 1.6
+  ctx.beginPath()
+  ctx.moveTo(x - 4, y + 3)
+  ctx.lineTo(x - 1, y + 2)
+  ctx.lineTo(x + 2, y + 4)
+  ctx.lineTo(x + 5, y + 2)
+  ctx.stroke()
+  // Nε dial: the accumulated rotation angle
+  ctx.font = 'italic bold 11px Georgia, serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  outlinedText(ctx, b > 0.66 ? '(Nε)²' : 'Nε', x, y - 52, '#ffc04a', 'rgba(5,8,25,0.9)', 3)
+}
+
 function drawColossus(ctx, x, y, t, e) {
   const seed = e ? e.seed : 0
   const armored = e ? e.armor > 0 : true
@@ -665,10 +899,30 @@ function drawColossus(ctx, x, y, t, e) {
 
 const ENEMY_DRAW = {
   depolarizer: drawDepolarizer,
+  cnotCrusher: drawCnotCrusher,
   dephaser: drawDephaser,
-  overRotator: drawOverRotator,
+  zzHopper: drawZZHopper,
   gremlin: drawGremlin,
+  flipFlock: drawFlipFlock,
+  overRotator: drawOverRotator,
+  detuner: drawDetuner,
   colossus: drawColossus,
+}
+
+// The colored type badge every error wears, so players can pick the right tool.
+export function drawTypeBadge(ctx, x, y, etype, r = 9) {
+  const info = ERROR_TYPES[etype]
+  ctx.fillStyle = 'rgba(5,8,25,0.85)'
+  circle(ctx, x, y, r)
+  ctx.fill()
+  ctx.strokeStyle = info.color
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = info.color
+  ctx.font = `bold ${Math.round(r * 1.25)}px system-ui, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(info.glyph, x, y + 0.5)
 }
 
 export function drawEnemySprite(ctx, type, x, y, t, e = null) {
@@ -843,9 +1097,13 @@ function drawEnemy(ctx, e, t) {
   }
   drawEnemySprite(ctx, e.type, e.x, e.y, t, e)
   if (e.hitFlash > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${e.hitFlash * 0.35})`
+    // Right tool: a bright flash. Wrong tool: a dull grey one.
+    ctx.save()
+    ctx.globalAlpha = e.hitFlash * (e.hitKind === 'effective' ? 0.45 : 0.3)
+    ctx.fillStyle = e.hitKind === 'effective' ? '#ffffff' : '#5a6080'
     circle(ctx, e.x, e.y, e.radius)
     ctx.fill()
+    ctx.restore()
   }
   if (e.twirledT > 0 && e.armor <= 0) {
     const letters = ['X', 'Y', 'Z']
@@ -856,7 +1114,9 @@ function drawEnemy(ctx, e, t) {
       ctx.fill()
     }
   }
-  drawBars(ctx, e.x, e.y - e.radius - 12, e.type === 'colossus' ? 80 : 40, e.hp, e.maxHp, e.armor, e.maxArmor, '#ff5d73')
+  const barW = e.type === 'colossus' ? 80 : 40
+  drawBars(ctx, e.x, e.y - e.radius - 12, barW, e.hp, e.maxHp, e.armor, e.maxArmor, '#ff5d73')
+  drawTypeBadge(ctx, e.x - barW / 2 - 11, e.y - e.radius - 9, e.etype)
 }
 
 function drawProjectile(ctx, p) {
@@ -1006,8 +1266,13 @@ export function renderField(ctx, engine, ui = {}) {
   ctx.textBaseline = 'middle'
   for (const f of engine.floaters) {
     ctx.globalAlpha = Math.min(1, (f.life / f.maxLife) * 2)
-    ctx.font = 'bold 13px system-ui, sans-serif'
-    outlinedText(ctx, f.text, f.x, f.y, f.color)
+    if (f.etype) {
+      ctx.font = '900 17px system-ui, sans-serif'
+      outlinedText(ctx, f.text, f.x, f.y, ERROR_TYPES[f.etype].color)
+    } else {
+      ctx.font = 'bold 13px system-ui, sans-serif'
+      outlinedText(ctx, f.text, f.x, f.y, f.color)
+    }
   }
   ctx.globalAlpha = 1
   for (const tk of engine.tokens) drawToken(ctx, tk, t)
@@ -1021,7 +1286,11 @@ export function drawIcon(ctx, kind, type, size, t = 0.8) {
   const s = size / 96
   ctx.scale(s, s)
   if (kind === 'unit') drawUnitSprite(ctx, type, 48, 52, t)
-  else {
+  else if (type === 'flipFlock') {
+    drawFlipBird(ctx, 30, 34, t, 1)
+    drawFlipBird(ctx, 66, 44, t, 3)
+    drawFlipBird(ctx, 40, 68, t, 5)
+  } else {
     const big = ENEMIES[type].boss
     if (big) {
       ctx.translate(48, 52)

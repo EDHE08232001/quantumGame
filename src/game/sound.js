@@ -51,6 +51,7 @@ const SOUNDS = {
     tone(233, 0.4, { type: 'sawtooth', vol: 0.05, delay: 0.4 })
   },
   bossSpawn: () => tone(90, 0.4, { type: 'sawtooth', vol: 0.05, slide: 60 }),
+  hop: () => tone(330, 0.14, { type: 'triangle', vol: 0.04, slide: 330 }),
   won: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.25, { type: 'triangle', vol: 0.07, delay: i * 0.12 })),
   lost: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.35, { type: 'sawtooth', vol: 0.05, delay: i * 0.18 })),
   click: () => tone(700, 0.04, { type: 'triangle', vol: 0.04 }),

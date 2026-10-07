@@ -1,5 +1,20 @@
 import { useState } from 'react'
-import { CATEGORY_INFO, ENEMIES, ENEMY_ORDER, MATCHUPS, UNITS, UNIT_ORDER } from '../game/data.js'
+import {
+  CATEGORY_INFO,
+  COUNTER_FOR,
+  EFFECTIVE_MULT,
+  ENEMIES,
+  ENEMY_ORDER,
+  ERROR_TYPES,
+  RESISTED_MULT,
+  SPECIAL_RULES,
+  TECHNIQUES,
+  TYPE_ORDER,
+  UNITS,
+  UNIT_ORDER,
+  formatMult,
+  matchup,
+} from '../game/data.js'
 import { BONUS_QUIZ, LEVELS } from '../game/levels.js'
 import Quiz from './Quiz.jsx'
 import SpriteIcon from './SpriteIcon.jsx'
@@ -20,6 +35,28 @@ export function CategoryBadge({ category }) {
   )
 }
 
+// An error type, e.g. "(G) Gate noise", in the type's color. `glyphOnly` drops the label.
+export function TypeBadge({ type, glyphOnly = false }) {
+  const info = ERROR_TYPES[type]
+  return (
+    <span className={`type-badge ${glyphOnly ? 'glyph-only' : ''}`} style={{ '--type': info.color }} title={info.label}>
+      <span className="type-glyph">{info.glyph}</span>
+      {!glyphOnly && info.label}
+    </span>
+  )
+}
+
+// "×2 vs Gate noise · ×½ vs everything else" for a technique.
+export function StrongVs({ unit }) {
+  const type = UNITS[unit].strongVs
+  if (!type) return null
+  return (
+    <span className="strong-vs">
+      <b>{formatMult(EFFECTIVE_MULT)}</b> vs <TypeBadge type={type} /> · {formatMult(RESISTED_MULT)} vs everything else
+    </span>
+  )
+}
+
 function TechniqueEntry({ id }) {
   const u = UNITS[id]
   return (
@@ -32,6 +69,11 @@ function TechniqueEntry({ id }) {
         <p className="entry-meta">
           Cost <b>{u.cost}</b> Shots · Recharge {u.recharge}s · Integrity {u.hp}
         </p>
+        {u.strongVs && (
+          <p>
+            <StrongVs unit={id} />
+          </p>
+        )}
         <p>{u.lesson}</p>
         <p className="entry-role">
           <b>In the game:</b> {u.role}
@@ -48,12 +90,18 @@ function ErrorEntry({ id }) {
       <SpriteIcon kind="enemy" type={id} size={72} />
       <div>
         <h3>
-          {e.name} <span className="entry-kind">{e.kind}</span>
+          {e.name} <TypeBadge type={e.errorType} /> <span className="entry-kind">{e.kind}</span>
         </h3>
         <p className="entry-meta">
           Strength {e.hp}
           {e.armor ? ` + ${e.armor} coherent armor` : ''} · Fidelity damage {e.fidelityDmg}% · Best counter:{' '}
-          <b>{UNITS[e.counter].short}</b>
+          <b>{UNITS[COUNTER_FOR[e.errorType]].short}</b>
+          {e.decaysTo && (
+            <>
+              {' '}
+              (then <b>{UNITS[COUNTER_FOR[e.decaysTo]].short}</b> once its armor breaks)
+            </>
+          )}
         </p>
         <p>{e.lesson}</p>
         <p className="entry-role">
@@ -65,34 +113,41 @@ function ErrorEntry({ id }) {
 }
 
 function Matchups() {
-  const techs = ['zne', 'dd', 'trex', 'twirl']
   return (
     <div className="matchups">
+      <p className="note">
+        Every error has a <b>type</b>, shown by the colored badge above it on the battlefield. Every technique is built for
+        one type: it deals <b>{formatMult(EFFECTIVE_MULT)} damage</b> to errors of that type and only{' '}
+        <b>{formatMult(RESISTED_MULT)}</b> to everything else.
+      </p>
       <table>
         <thead>
           <tr>
             <th />
-            {ENEMY_ORDER.map((id) => (
-              <th key={id}>
-                <SpriteIcon kind="enemy" type={id} size={40} />
-                <div>{ENEMIES[id].name}</div>
+            {TYPE_ORDER.map((type) => (
+              <th key={type}>
+                <TypeBadge type={type} />
+                <div className="type-members">
+                  {ENEMY_ORDER.filter((id) => ENEMIES[id].errorType === type).map((id) => (
+                    <SpriteIcon key={id} kind="enemy" type={id} size={34} />
+                  ))}
+                </div>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {techs.map((t) => (
+          {TECHNIQUES.map((t) => (
             <tr key={t}>
               <th>
                 <SpriteIcon kind="unit" type={t} size={40} />
                 <div>{UNITS[t].short}</div>
               </th>
-              {ENEMY_ORDER.map((id) => {
-                const v = MATCHUPS[t][id]
-                const cls = /Strong|Strips/.test(v) ? 'good' : /No effect|Misses|Weak|Blocks only/.test(v) ? 'bad' : 'meh'
+              {TYPE_ORDER.map((type) => {
+                const good = matchup(t, type) === 'effective'
                 return (
-                  <td key={id} className={cls}>
-                    {v}
+                  <td key={type} className={good ? 'good' : 'bad'}>
+                    {good ? `${formatMult(EFFECTIVE_MULT)} Strong` : `${formatMult(RESISTED_MULT)} Weak`}
                   </td>
                 )
               })}
@@ -100,6 +155,14 @@ function Matchups() {
           ))}
         </tbody>
       </table>
+      <h3 className="rules-head">Special rules</h3>
+      <ul className="rules">
+        {SPECIAL_RULES.map((r) => (
+          <li key={r.unit}>
+            <b>{UNITS[r.unit].short}:</b> {r.text}
+          </li>
+        ))}
+      </ul>
       <p className="note">
         The big idea: no single technique handles every error. Real experiments stack them, with <b>suppression</b> (DD,
         twirling) shaping the noise while the circuit runs and <b>mitigation</b> (TREX, ZNE) cleaning up the results
@@ -190,7 +253,17 @@ export default function Almanac({ onClose, embedded = false }) {
             ))}
           </>
         )}
-        {tab === 'errors' && ENEMY_ORDER.map((id) => <ErrorEntry key={id} id={id} />)}
+        {tab === 'errors' &&
+          TYPE_ORDER.map((type) => (
+            <section key={type} className="type-group">
+              <h3 className="type-group-head">
+                <TypeBadge type={type} /> <span>{ERROR_TYPES[type].text}</span>
+              </h3>
+              {ENEMY_ORDER.filter((id) => ENEMIES[id].errorType === type).map((id) => (
+                <ErrorEntry key={id} id={id} />
+              ))}
+            </section>
+          ))}
         {tab === 'matchups' && <Matchups />}
         {tab === 'quiz' && <PracticeQuiz />}
       </div>

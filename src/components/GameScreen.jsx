@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FIELD_H, FIELD_W, TICK, cellAt } from '../game/constants.js'
-import { ENEMIES, UNITS } from '../game/data.js'
+import {
+  COUNTER_FOR,
+  EFFECTIVE_MULT,
+  ENEMIES,
+  ENEMY_ORDER,
+  ERROR_TYPES,
+  RESISTED_MULT,
+  TYPE_ORDER,
+  UNITS,
+  formatMult,
+} from '../game/data.js'
 import { GameEngine } from '../game/engine.js'
 import { LEVELS } from '../game/levels.js'
 import { renderField } from '../game/renderer.js'
 import { play, setMuted } from '../game/sound.js'
-import Almanac, { CategoryBadge } from './Almanac.jsx'
+import Almanac, { CategoryBadge, StrongVs, TypeBadge } from './Almanac.jsx'
 import Quiz from './Quiz.jsx'
 import SpriteIcon from './SpriteIcon.jsx'
 
@@ -35,6 +45,11 @@ function Card({ type, cooldown, shots, selected, hotkey, onPick }) {
       aria-label={`${def.name}, ${def.cost} shots`}
     >
       <span className="card-key">{hotkey}</span>
+      {def.strongVs && (
+        <span className="card-type">
+          <TypeBadge type={def.strongVs} glyphOnly />
+        </span>
+      )}
       <SpriteIcon kind="unit" type={type} size={50} />
       <span className="card-name">{def.short}</span>
       <span className={`card-cost ${affordable ? '' : 'short'}`}>⚡{def.cost}</span>
@@ -42,6 +57,7 @@ function Card({ type, cooldown, shots, selected, hotkey, onPick }) {
       <span className="card-tip" role="tooltip">
         <b>{def.name}</b>
         <CategoryBadge category={def.category} />
+        {def.strongVs && <StrongVs unit={type} />}
         <span>{def.role}</span>
       </span>
     </button>
@@ -74,9 +90,40 @@ function ProgressBar({ progress }) {
 
 // ------------------------------------------------------------------ overlays
 
+// Every error that can show up in a level, in Almanac order.
+function levelErrors(level) {
+  if (level.endless) return ENEMY_ORDER
+  const seen = new Set(level.waves.flatMap((wv) => Object.keys(wv.spawn)))
+  return ENEMY_ORDER.filter((id) => seen.has(id))
+}
+
+function TypeRule() {
+  return (
+    <section className="lesson-card rule">
+      <div>
+        <div className="lesson-tag">How damage works: error types</div>
+        <p>
+          Every error wears a colored <b>type badge</b>. Each technique is built for one type: the right technique deals{' '}
+          <b>{formatMult(EFFECTIVE_MULT)} damage</b>, and any other only <b>{formatMult(RESISTED_MULT)}</b>. Match
+          the badge to the card with the same color.
+        </p>
+        <div className="type-rule-grid">
+          {TYPE_ORDER.map((type) => (
+            <div key={type} className="type-rule-row">
+              <TypeBadge type={type} />
+              <span className="arrow">→</span>
+              <SpriteIcon kind="unit" type={COUNTER_FOR[type]} size={34} />
+              <b>{UNITS[COUNTER_FOR[type]].short}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function LessonOverlay({ level, bonus, onStart }) {
   const { intro } = level
-  const enemy = intro.newError && ENEMIES[intro.newError]
   const startRef = useRef(null)
   useEffect(() => {
     startRef.current?.focus({ preventScroll: true })
@@ -88,18 +135,20 @@ function LessonOverlay({ level, bonus, onStart }) {
         <h2>{level.name}</h2>
         <p className="lesson-sub">{level.subtitle}</p>
         <p>{intro.text}</p>
-        {enemy && (
-          <section className="lesson-card error">
-            <SpriteIcon kind="enemy" type={intro.newError} size={80} />
+        {intro.typeRule && <TypeRule />}
+        {intro.newErrors.map((id) => (
+          <section key={id} className="lesson-card error">
+            <SpriteIcon kind="enemy" type={id} size={80} />
             <div>
               <div className="lesson-tag">New error detected</div>
               <h3>
-                {enemy.name} <span className="entry-kind">{enemy.kind}</span>
+                {ENEMIES[id].name} <TypeBadge type={ENEMIES[id].errorType} />{' '}
+                <span className="entry-kind">{ENEMIES[id].kind}</span>
               </h3>
-              <p>{enemy.lesson}</p>
+              <p>{ENEMIES[id].lesson}</p>
             </div>
           </section>
-        )}
+        ))}
         {intro.newUnits.map((id) => (
           <section key={id} className="lesson-card unit">
             <SpriteIcon kind="unit" type={id} size={80} />
@@ -115,6 +164,17 @@ function LessonOverlay({ level, bonus, onStart }) {
             </div>
           </section>
         ))}
+        <div className="lineup">
+          <div className="lesson-tag">Errors in this level</div>
+          <div className="lineup-row">
+            {levelErrors(level).map((id) => (
+              <div key={id} className="lineup-item" title={`${ENEMIES[id].name}: ${ERROR_TYPES[ENEMIES[id].errorType].label}`}>
+                <SpriteIcon kind="enemy" type={id} size={44} />
+                <TypeBadge type={ENEMIES[id].errorType} glyphOnly />
+              </div>
+            ))}
+          </div>
+        </div>
         {bonus > 0 && <p className="bonus-note">Quiz bonus: you start with +{bonus} Shots.</p>}
         <button ref={startRef} type="button" className="btn primary big" onClick={onStart}>
           Start defending!
@@ -136,6 +196,18 @@ function Stars({ n }) {
   )
 }
 
+function MatchupScore({ accuracy }) {
+  if (accuracy === null) return null
+  const pct = Math.round(accuracy * 100)
+  const grade = pct >= 75 ? 'good' : pct >= 55 ? 'meh' : 'bad'
+  return (
+    <p className={`matchup-score ${grade}`}>
+      Damage dealt with the right technique: <b>{pct}%</b>
+      {grade !== 'good' && ' (match each error\'s type badge to the card of the same color)'}
+    </p>
+  )
+}
+
 function ResultOverlay({ result, level, onRetry, onNext, onExit, onQuiz }) {
   const [quizDone, setQuizDone] = useState(false)
   if (result.won) {
@@ -149,6 +221,7 @@ function ResultOverlay({ result, level, onRetry, onNext, onExit, onQuiz }) {
             Average qubit fidelity: <b>{Math.round(result.fidelity)}%</b>
             {result.stars < 3 && ' (finish with 90% or more for 3 stars)'}
           </p>
+          <MatchupScore accuracy={result.accuracy} />
           {level.quiz && (
             <div className="result-quiz">
               <h3>Checkpoint question</h3>
@@ -189,6 +262,7 @@ function ResultOverlay({ result, level, onRetry, onNext, onExit, onQuiz }) {
     )
   }
   const enemy = ENEMIES[result.lostTo]
+  const counter = enemy && COUNTER_FOR[enemy.errorType]
   return (
     <div className="overlay">
       <div className="panel result lose">
@@ -203,11 +277,17 @@ function ResultOverlay({ result, level, onRetry, onNext, onExit, onQuiz }) {
           <section className="lesson-card error">
             <SpriteIcon kind="enemy" type={result.lostTo} size={72} />
             <div>
-              <div className="lesson-tag">The final blow: {enemy.name}</div>
+              <div className="lesson-tag">
+                The final blow: {enemy.name} <TypeBadge type={enemy.errorType} />
+              </div>
               <p>{enemy.tip}</p>
+              <p className="counter-hint">
+                Right tool: <SpriteIcon kind="unit" type={counter} size={30} /> <b>{UNITS[counter].name}</b>
+              </p>
             </div>
           </section>
         )}
+        <MatchupScore accuracy={result.accuracy} />
         <div className="btn-row">
           <button type="button" className="btn primary" onClick={onRetry} autoFocus>
             Try again
@@ -324,12 +404,12 @@ export default function GameScreen({ level, progress, updateProgress, onExit, on
           unlocked: Math.max(progress.unlocked, level.id + 1),
           stars: { ...progress.stars, [level.id]: Math.max(prevStars, stars) },
         })
-        setResult({ won: true, stars, fidelity: eng.averageFidelity(), bonusEarned: null })
+        setResult({ won: true, stars, fidelity: eng.averageFidelity(), accuracy: eng.matchupAccuracy(), bonusEarned: null })
         play('won')
       } else {
         const best = level.endless ? Math.max(progress.bestEndless || 0, eng.waveIndex) : 0
         if (level.endless) updateProgress({ bestEndless: best })
-        setResult({ won: false, lostTo: eng.lostTo, wave: eng.waveIndex, best })
+        setResult({ won: false, lostTo: eng.lostTo, wave: eng.waveIndex, best, accuracy: eng.matchupAccuracy() })
         play('lost')
       }
       setPhase(won ? 'won' : 'lost')

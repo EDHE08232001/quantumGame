@@ -1,26 +1,27 @@
 import { TICK } from '../src/game/constants.js'
+import { COUNTER_FOR } from '../src/game/data.js'
 import { GameEngine } from '../src/game/engine.js'
 
-// A reasonable but unspectacular player: economy first, then the right
-// counter for whatever is coming down each lane.
-export function botAct(g) {
+// Where the bot puts each technique in a lane (column index).
+const SPOT = { zne: 1, twirl: 2, trex: 4, dd: 5 }
+
+// A reasonable but unspectacular player: economy first, then the technique
+// built for each error type it sees coming down a lane.
+export function botAct(g, { counterFor = COUNTER_FOR } = {}) {
   const rows = g.level.rows
   const has = (t) => g.cards.some((c) => c.type === t)
   const tryPlace = (type, row, col) => g.canPlace(type, row, col).ok && g.place(type, row, col).ok
-  const threat = (row, type) => g.enemies.some((e) => e.row === row && e.type === type)
 
-  // React to threats first.
+  // React to threats first: make sure each lane has the counter for every error type in it.
   for (const row of rows) {
-    if (has('trex') && threat(row, 'gremlin') && !g.units.some((u) => u.row === row && u.type === 'trex')) {
-      if (tryPlace('trex', row, 4)) return
+    const types = new Set(g.enemies.filter((e) => e.row === row).map((e) => e.etype))
+    for (const etype of ['readout', 'coherent', 'idle', 'gate']) {
+      if (!types.has(etype)) continue
+      const unit = counterFor[etype]
+      if (!has(unit) || g.units.some((u) => u.row === row && u.type === unit)) continue
+      if (tryPlace(unit, row, SPOT[unit])) return
     }
-    if (has('twirl') && (threat(row, 'overRotator') || threat(row, 'colossus')) && !g.unitAt(row, 2)) {
-      if (tryPlace('twirl', row, 2)) return
-    }
-    if (has('dd') && threat(row, 'dephaser') && !g.unitAt(row, 5)) {
-      if (tryPlace('dd', row, 5)) return
-    }
-    if (g.enemies.some((e) => e.row === row) && !g.unitAt(row, 1)) {
+    if (types.size > 0 && has('zne') && !g.unitAt(row, 1)) {
       if (tryPlace('zne', row, 1)) return
     }
   }
@@ -40,6 +41,20 @@ export function botAct(g) {
     tryPlace(type, row, col)
     return // wait for this item before moving down the list
   }
+}
+
+// The same build order, but answering each error type with the wrong technique.
+export const WRONG_COUNTER = { gate: 'twirl', idle: 'zne', readout: 'dd', coherent: 'trex' }
+export function wrongBotAct(g) {
+  return botAct(g, { counterFor: WRONG_COUNTER })
+}
+
+// Ignores error types entirely: Samplers, then ZNE on every free tile.
+export function zneOnlyBotAct(g) {
+  const tryPlace = (type, row, col) => g.canPlace(type, row, col).ok && g.place(type, row, col).ok
+  for (const row of g.level.rows) if (!g.unitAt(row, 0)) return void tryPlace('sampler', row, 0)
+  for (const col of [1, 3, 2, 4, 5, 6])
+    for (const row of g.level.rows) if (!g.unitAt(row, col)) return void tryPlace('zne', row, col)
 }
 
 export function playLevel(level, seed, { bot = true, act = botAct } = {}) {
